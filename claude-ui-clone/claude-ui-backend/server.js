@@ -256,6 +256,13 @@ app.post('/api/chat', authenticateToken, async (req, res) => {
       if (userPermissions.deniedTools && userPermissions.deniedTools.length > 0) {
         queryOptions.deniedTools = userPermissions.deniedTools;
       }
+      // Add allowed/denied skills if specified
+      if (userPermissions.allowedSkills && userPermissions.allowedSkills.length > 0) {
+        queryOptions.allowedSkills = userPermissions.allowedSkills;
+      }
+      if (userPermissions.deniedSkills && userPermissions.deniedSkills.length > 0) {
+        queryOptions.deniedSkills = userPermissions.deniedSkills;
+      }
       if (userPermissions.allowedDirectories && userPermissions.allowedDirectories.length > 0) {
         queryOptions.additionalDirectories = userPermissions.allowedDirectories;
       }
