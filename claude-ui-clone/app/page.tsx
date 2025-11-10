@@ -537,7 +537,7 @@ export default function Home() {
       const errorMessage: Message = {
         id: Date.now().toString(),
         role: 'assistant',
-        content: 'Sorry, there was an error processing your request. Please make sure you have set the ANTHROPIC_API_KEY environment variable.',
+        content: 'Sorry, there was an error processing your request.',
       };
       setConversations(prev =>
         prev.map(conv =>
@@ -702,7 +702,7 @@ export default function Home() {
         {/* Input - FIXED at bottom with spacing, moves with keyboard */}
         <div style={{
           position: 'fixed',
-          bottom: `${keyboardHeight > 0 ? keyboardHeight : 20}px`,
+          bottom: `${keyboardHeight > 0 ? keyboardHeight : 0}px`,
           left: isMobile ? '0' : (sidebarCollapsed ? '0' : '256px'),
           right: '0',
           zIndex: 30,

@@ -175,16 +175,19 @@ export default function ChatInput({ onSend, disabled }: ChatInputProps) {
               placeholder="How can I help you today?"
               disabled={disabled}
               rows={1}
+              autoComplete="off"
+              spellCheck={false}
               className="resize-none bg-transparent text-zinc-900 placeholder-zinc-400 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed overflow-y-auto w-full border-0 flex-1"
-              style={{ minHeight: '20px', maxHeight: '320px', height: '20px', paddingLeft: '12px', paddingRight: '12px', paddingTop: '0', paddingBottom: '0', fontSize: '16px', lineHeight: '20px', touchAction: 'manipulation' }}
+              style={{ minHeight: '20px', maxHeight: '320px', height: '20px', paddingLeft: '12px', paddingRight: '12px', paddingTop: '0', paddingBottom: '0', fontSize: '16px', lineHeight: '20px', touchAction: 'manipulation', WebkitUserSelect: 'text', WebkitAppearance: 'none', appearance: 'none' }}
             />
             {/* Send button */}
             <button
               onClick={handleSend}
               disabled={!input.trim() || disabled || isUploading}
               className="flex items-center justify-center rounded-lg text-zinc-900 hover:bg-zinc-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors flex-shrink-0"
-              style={{ width: '32px', height: '32px' }}
+              style={{ width: '32px', height: '32px', WebkitAppearance: 'none', appearance: 'none' }}
               aria-label="Send message"
+              type="button"
             >
               {isUploading ? (
                 <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">

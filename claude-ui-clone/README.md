@@ -47,21 +47,7 @@ cd claude-ui-clone
 npm install
 \`\`\`
 
-### 3. Set Up Environment Variables
-
-Create a \`.env.local\` file in the root directory:
-
-\`\`\`bash
-cp .env.example .env.local
-\`\`\`
-
-Then add your Anthropic API key:
-
-\`\`\`env
-ANTHROPIC_API_KEY=your_api_key_here
-\`\`\`
-
-### 4. Run the Development Server
+### 3. Run the Development Server
 
 \`\`\`bash
 npm run dev
@@ -145,12 +131,6 @@ The app is configured with:
 - **Allowed Tools**: \`Read\`, \`Write\`, \`Bash\`, \`Grep\`, \`Glob\`
 
 You can modify these in \`/app/api/chat/route.ts\`.
-
-## Environment Variables
-
-| Variable | Description | Required |
-|----------|-------------|----------|
-| \`ANTHROPIC_API_KEY\` | Your Anthropic API key | Yes |
 
 ## Learn More
 

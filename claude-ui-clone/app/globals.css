@@ -166,3 +166,24 @@ input[type="radio"]:focus {
   outline: none;
   box-shadow: 0 0 0 3px rgba(24, 24, 27, 0.1);
 }
+
+/* Suppress iOS keyboard accessory bar for textarea */
+textarea {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+/* Suppress iOS form input accessories */
+input[type="text"],
+input[type="email"],
+input[type="password"],
+textarea {
+  border-radius: 0;
+}
+
+/* Hide iOS keyboard accessory bar by preventing form detection */
+@supports (padding: max(0px)) {
+  textarea {
+    padding-bottom: max(0px, env(safe-area-inset-bottom));
+  }
+}

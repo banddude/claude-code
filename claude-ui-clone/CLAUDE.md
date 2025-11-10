@@ -45,7 +45,6 @@ cd ..
 
 # Set up environment
 cp .env.example .env.local
-# Edit .env.local and add: ANTHROPIC_API_KEY=your_key_here
 ```
 
 ### Running the App
