@@ -118,34 +118,30 @@ export default function ChatInput({ onSend, disabled }: ChatInputProps) {
       // Only grow if there's content
       if (input) {
         const scrollHeight = textareaRef.current.scrollHeight;
-        textareaRef.current.style.height = Math.min(Math.max(scrollHeight, 20), 200) + 'px';
+        textareaRef.current.style.height = Math.min(Math.max(scrollHeight, 20), 320) + 'px';
       }
     }
   }, [input]);
 
   return (
-    <div className="w-full" style={{ backgroundColor: 'rgb(250, 249, 245)' }}>
+    <div className="w-full">
       <div className="max-w-3xl mx-auto" style={{ paddingTop: '8px', paddingBottom: '8px', paddingLeft: '12px', paddingRight: '12px' }}>
         <div
-          className="flex flex-col rounded-2xl bg-white shadow-sm cursor-text"
+          className="flex flex-col rounded-2xl bg-white shadow-sm"
           style={{
             border: isDragging ? '2px solid rgb(59, 130, 246)' : '1px solid rgba(31, 30, 29, 0.15)',
-            paddingLeft: '12px',
-            paddingRight: '12px',
-            paddingTop: '8px',
-            paddingBottom: '8px',
-            gap: '8px',
-            backgroundColor: isDragging ? 'rgb(239, 246, 255)' : 'white'
+            backgroundColor: isDragging ? 'rgb(239, 246, 255)' : 'white',
+            marginLeft: '12px',
+            marginRight: '12px'
           }}
           onDragEnter={handleDragEnter}
           onDragLeave={handleDragLeave}
           onDragOver={handleDragOver}
           onDrop={handleDrop}
-          onClick={() => textareaRef.current?.focus()}
         >
           {/* Display pending files */}
           {pendingFiles.length > 0 && (
-            <div className="flex flex-col gap-1 pb-2 border-b border-zinc-200">
+            <div className="flex flex-col gap-1 px-3 pt-3 pb-2 border-b border-zinc-200">
               <div className="text-xs text-zinc-500">Files to attach:</div>
               <div className="flex flex-wrap gap-2">
                 {pendingFiles.map((file, idx) => (
@@ -170,38 +166,37 @@ export default function ChatInput({ onSend, disabled }: ChatInputProps) {
             </div>
           )}
 
-          <textarea
-            ref={textareaRef}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="How can I help you today?"
-            disabled={disabled}
-            rows={1}
-            className="resize-none bg-transparent text-[15px] leading-6 text-zinc-900 placeholder-zinc-400 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed overflow-y-auto w-full border-0"
-            style={{ minHeight: '20px', maxHeight: '200px', height: '20px', padding: '0' }}
-          />
-
-          <div className="flex items-center justify-end gap-2 flex-wrap">
-              {/* Send button */}
-              <button
-                onClick={handleSend}
-                disabled={!input.trim() || disabled || isUploading}
-                className="flex items-center justify-center rounded-lg text-zinc-900 hover:bg-zinc-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                style={{ width: '36px', height: '36px' }}
-                aria-label="Send message"
-              >
-                {isUploading ? (
-                  <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                ) : (
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
-                  </svg>
-                )}
-              </button>
+          <div className="flex items-center gap-2 px-3 py-2">
+            <textarea
+              ref={textareaRef}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="How can I help you today?"
+              disabled={disabled}
+              rows={1}
+              className="resize-none bg-transparent text-zinc-900 placeholder-zinc-400 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed overflow-y-auto w-full border-0 flex-1"
+              style={{ minHeight: '20px', maxHeight: '320px', height: '20px', paddingLeft: '12px', paddingRight: '12px', paddingTop: '0', paddingBottom: '0', fontSize: '16px', lineHeight: '20px', touchAction: 'manipulation' }}
+            />
+            {/* Send button */}
+            <button
+              onClick={handleSend}
+              disabled={!input.trim() || disabled || isUploading}
+              className="flex items-center justify-center rounded-lg text-zinc-900 hover:bg-zinc-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors flex-shrink-0"
+              style={{ width: '32px', height: '32px' }}
+              aria-label="Send message"
+            >
+              {isUploading ? (
+                <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+              ) : (
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
+                </svg>
+              )}
+            </button>
           </div>
         </div>
       </div>

@@ -36,6 +36,7 @@ export default function Home() {
   const [token, setToken] = useState<string | null>(null);
   const [username, setUsername] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
   const [userFirstName, setUserFirstName] = useState<string | null>(null);
@@ -56,6 +57,109 @@ export default function Home() {
     checkMobile();
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  // Prevent all zoom attempts
+  useEffect(() => {
+    // Prevent pinch zoom
+    const preventZoom = (e: TouchEvent) => {
+      if (e.touches.length > 1) {
+        e.preventDefault();
+      }
+    };
+
+    // Prevent wheel zoom (ctrl+wheel or pinch on trackpad)
+    const preventWheelZoom = (e: WheelEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+      }
+    };
+
+    // Prevent keyboard zoom
+    const preventKeyboardZoom = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && (e.key === '+' || e.key === '-' || e.key === '0' || e.key === '=' || e.key === '_')) {
+        e.preventDefault();
+      }
+    };
+
+    document.addEventListener('touchmove', preventZoom, { passive: false });
+    document.addEventListener('wheel', preventWheelZoom, { passive: false });
+    document.addEventListener('keydown', preventKeyboardZoom, { passive: false });
+
+    return () => {
+      document.removeEventListener('touchmove', preventZoom);
+      document.removeEventListener('wheel', preventWheelZoom);
+      document.removeEventListener('keydown', preventKeyboardZoom);
+    };
+  }, []);
+
+  // Handle keyboard visibility using Visual Viewport API
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.visualViewport) return;
+
+    const updateKeyboardHeight = () => {
+      const viewport = window.visualViewport!;
+      // Calculate keyboard height more accurately
+      const windowHeight = window.innerHeight;
+      const viewportHeight = viewport.height;
+      const viewportOffsetTop = viewport.offsetTop || 0;
+
+      // Keyboard height is the difference between window height and visible viewport
+      const calculatedHeight = windowHeight - viewportHeight - viewportOffsetTop;
+      const finalHeight = Math.max(0, calculatedHeight);
+
+      setKeyboardHeight(finalHeight);
+
+      // Force header to stay at viewport top even with keyboard
+      const header = document.querySelector('header');
+      if (header) {
+        (header as HTMLElement).style.top = '0px';
+        (header as HTMLElement).style.position = 'fixed';
+      }
+    };
+
+    // Lock header position constantly
+    const lockHeader = () => {
+      const header = document.querySelector('header');
+      if (header) {
+        (header as HTMLElement).style.top = '0px';
+        (header as HTMLElement).style.position = 'fixed';
+        (header as HTMLElement).style.width = '100%';
+        (header as HTMLElement).style.zIndex = '9999';
+      }
+    };
+
+    // Update on various events
+    window.visualViewport.addEventListener('resize', updateKeyboardHeight);
+    window.visualViewport.addEventListener('scroll', () => {
+      lockHeader();
+      updateKeyboardHeight();
+    });
+
+    // Also listen to focus events on input fields
+    const handleFocusIn = () => {
+      setTimeout(updateKeyboardHeight, 300);
+    };
+
+    const handleFocusOut = () => {
+      setTimeout(() => setKeyboardHeight(0), 300);
+    };
+
+    document.addEventListener('focusin', handleFocusIn);
+    document.addEventListener('focusout', handleFocusOut);
+
+    // Lock initially and on interval
+    lockHeader();
+    updateKeyboardHeight();
+    const intervalId = setInterval(lockHeader, 500);
+
+    return () => {
+      window.visualViewport?.removeEventListener('resize', updateKeyboardHeight);
+      window.visualViewport?.removeEventListener('scroll', updateKeyboardHeight);
+      document.removeEventListener('focusin', handleFocusIn);
+      document.removeEventListener('focusout', handleFocusOut);
+      clearInterval(intervalId);
+    };
   }, []);
 
   // Load token from localStorage
@@ -453,20 +557,31 @@ export default function Home() {
   };
 
   return (
-    <div className="flex flex-col h-screen overflow-hidden" style={{ backgroundColor: 'rgb(250, 249, 245)' }}>
-      {/* Fixed Header - Always visible */}
+    <div className="flex flex-col h-screen overflow-hidden" style={{ backgroundColor: 'rgb(250, 249, 245)', position: 'fixed', width: '100%', height: '100vh', touchAction: 'pan-x pan-y' }}>
+      {/* Fixed Header - Always visible, never scrolls, never zooms */}
       <header
-        className="fixed top-0 left-0 right-0 z-50 flex items-center h-12"
+        className="fixed top-0 left-0 right-0 flex items-center h-12"
         style={{
           backgroundColor: 'rgb(250, 249, 245)',
-          paddingLeft: '16px',
-          paddingRight: '16px'
+          paddingLeft: '0',
+          paddingRight: '16px',
+          zIndex: 9999,
+          position: 'fixed',
+          width: '100%',
+          touchAction: 'none',
+          WebkitTransform: 'translateZ(0)',
+          transform: 'translateZ(0)',
+          willChange: 'transform'
         }}
       >
         <button
           onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-          className="rounded-md p-2 hover:bg-zinc-100 transition-colors"
+          className="rounded-md hover:bg-zinc-100 transition-colors"
           aria-label={sidebarCollapsed ? "Open menu" : "Close menu"}
+          style={{
+            marginLeft: isMobile ? '8px' : '42px',
+            padding: isMobile ? '8px' : '8px 16px'
+          }}
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -511,11 +626,11 @@ export default function Home() {
               WebkitOverflowScrolling: 'touch',
               overscrollBehavior: 'contain',
               paddingTop: '20px',
-              paddingBottom: 'calc(env(safe-area-inset-bottom) + 140px)',
+              paddingBottom: `${keyboardHeight > 0 ? keyboardHeight + 120 : 140}px`,
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
-              transition: 'left 0.3s ease',
+              transition: 'left 0.3s ease, padding-bottom 0.3s ease',
               zIndex: 10
             }}
           >
@@ -523,11 +638,14 @@ export default function Home() {
             {!currentConversation || currentConversation.messages.length === 0 ? (
               <div className="flex items-center justify-center" style={{ paddingLeft: '24px', paddingRight: '24px', minHeight: 'calc(100vh - 228px)' }}>
                 <div className="text-center max-w-2xl mx-auto">
+                  <div className="mb-6 flex justify-center">
+                    <ClaudeLogo size={128} />
+                  </div>
                   <h2 className="mb-3 text-3xl font-semibold text-zinc-900">
                     How can I help you today?
                   </h2>
                   <p className="text-zinc-600 max-w-md mx-auto text-sm">
-                    I'm AIVA, an AI assistant. I can help with writing, analysis, math, coding, and more.
+                    Hi, I'm AIVA, your virtual AI assistant for Shaffer Construction. I'm here to help with QuickBooks, Gmail, Calendar, Drive, Sheets, and more.
                   </p>
                 </div>
               </div>
@@ -583,16 +701,17 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Input - FIXED at bottom */}
+        {/* Input - FIXED at bottom with spacing, moves with keyboard */}
         <div style={{
           position: 'fixed',
-          bottom: '0',
+          bottom: `${keyboardHeight > 0 ? keyboardHeight : 20}px`,
           left: isMobile ? '0' : (sidebarCollapsed ? '0' : '256px'),
           right: '0',
           zIndex: 30,
-          transition: 'left 0.3s ease',
+          transition: 'bottom 0.3s ease, left 0.3s ease',
           display: 'flex',
-          justifyContent: 'center'
+          justifyContent: 'center',
+          paddingBottom: keyboardHeight > 0 ? '0' : 'env(safe-area-inset-bottom)'
         }}>
           <div style={{ width: '100%', maxWidth: '800px' }}>
             <ChatInput onSend={handleSendMessage} disabled={isLoading} />

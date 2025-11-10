@@ -10,11 +10,12 @@ export default function ClaudeLogo({ size = 32, className = '' }: ClaudeLogoProp
       style={{ width: size, height: size }}
     >
       <img
-        src="/claude-icon.png"
-        alt="Claude"
+        src="/aiva-icon.png"
+        alt="AIVA"
         width={size}
         height={size}
         className="rounded-lg"
+        style={{ filter: 'brightness(0) saturate(100%)' }}
       />
     </div>
   );

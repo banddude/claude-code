@@ -183,3 +183,5 @@ Backend listens on `0.0.0.0` to accept network connections. Frontend dynamically
 | `claude-ui-backend/conversations/{user}.json` | Per-user conversation history |
 | `app/globals.css` | Tailwind v4 config with Claude.ai colors |
 | `app/components/ChatMessage.tsx` | Message rendering with markdown + tool indicators |
+- repo: 
+https://github.com/banddude/claude-code/
