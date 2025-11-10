@@ -7,6 +7,7 @@ import Sidebar from './components/Sidebar';
 import ThemeToggle from './components/ThemeToggle';
 import Login from './components/Login';
 import Settings from './components/Settings';
+import UserProfile from './components/UserProfile';
 import ClaudeLogo from './components/ClaudeLogo';
 import ToolUsage from './components/ToolUsage';
 
@@ -35,7 +36,7 @@ export default function Home() {
   const [isThinking, setIsThinking] = useState(false);
   const [token, setToken] = useState<string | null>(null);
   const [username, setUsername] = useState<string | null>(null);
-  const [showSettings, setShowSettings] = useState(false);
+  const [currentView, setCurrentView] = useState<'chat' | 'settings' | 'profile'>('chat');
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
@@ -604,12 +605,14 @@ export default function Home() {
           onDeleteConversation={handleDeleteConversation}
           onClearAll={handleClearAll}
           username={username || 'User'}
-          onOpenSettings={() => setShowSettings(true)}
+          onOpenSettings={() => setCurrentView('settings')}
+          onOpenProfile={() => setCurrentView('profile')}
           onLogout={handleLogout}
           isCollapsed={sidebarCollapsed}
           onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
         />
 
+        {currentView === 'chat' && (
         <div style={{ flex: 1, minWidth: 0, position: 'relative' }}>
           {/* Messages - scrollable area that respects fixed header (48px) and input box */}
           <div
@@ -698,7 +701,26 @@ export default function Home() {
           </div>
           </div>
         </div>
+        )}
 
+        {currentView === 'settings' && token && username && (
+          <Settings
+            token={token}
+            currentUsername={username}
+            onClose={() => setCurrentView('chat')}
+          />
+        )}
+
+        {currentView === 'profile' && token && username && (
+          <UserProfile
+            token={token}
+            currentUsername={username}
+            onClose={() => setCurrentView('chat')}
+          />
+        )}
+
+        {currentView === 'chat' && (
+        <>
         {/* Input - FIXED at bottom with spacing, moves with keyboard */}
         <div style={{
           position: 'fixed',
@@ -715,16 +737,9 @@ export default function Home() {
             <ChatInput onSend={handleSendMessage} disabled={isLoading} />
           </div>
         </div>
+        </>
+        )}
       </div>
-
-      {/* Settings Modal */}
-      {showSettings && token && username && (
-        <Settings
-          token={token}
-          currentUsername={username}
-          onClose={() => setShowSettings(false)}
-        />
-      )}
     </div>
   );
 }
