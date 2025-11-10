@@ -25,11 +25,8 @@ export default function FileTree({ onBack }: FileTreeProps) {
         const username = localStorage.getItem('username');
         if (!token || !username) return;
 
-        const BACKEND_URL = typeof window !== 'undefined' && window.location.hostname !== 'localhost'
-          ? `http://${window.location.hostname}:3001`
-          : 'http://localhost:3001';
-
-        const response = await fetch(`${BACKEND_URL}/api/files/tree`, {
+        // Use relative paths for API calls (works through tunnel and locally)
+        const response = await fetch(`/api/files/tree`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }

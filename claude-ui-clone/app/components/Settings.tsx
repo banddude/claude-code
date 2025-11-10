@@ -16,10 +16,8 @@ interface SettingsProps {
 }
 
 const getBackendUrl = () => {
-  if (typeof window === 'undefined') return 'http://localhost:3001';
-  return window.location.hostname !== 'localhost'
-    ? `http://${window.location.hostname}:3001`
-    : 'http://localhost:3001';
+  // Use relative paths for API calls (works through tunnel and locally)
+  return '';
 };
 
 const ALL_TOOLS = [

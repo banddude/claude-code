@@ -19,12 +19,8 @@ export default function Login({ onLogin }: LoginProps) {
     setIsLoading(true);
 
     try {
-      // Use the current hostname's IP for backend, or localhost if local
-      const backendUrl = typeof window !== 'undefined' && window.location.hostname !== 'localhost'
-        ? `http://${window.location.hostname}:3001`
-        : 'http://localhost:3001';
-
-      const response = await fetch(`${backendUrl}/api/login`, {
+      // Use relative paths for API calls (works through tunnel and locally)
+      const response = await fetch(`/api/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password }),

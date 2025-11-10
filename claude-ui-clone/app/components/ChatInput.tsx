@@ -50,7 +50,7 @@ export default function ChatInput({ onSend, disabled }: ChatInputProps) {
       formData.append('file', file);
 
       try {
-        const response = await fetch('http://localhost:3001/api/upload', {
+        const response = await fetch('/api/upload', {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`

@@ -42,10 +42,8 @@ export default function Home() {
   const [userFirstName, setUserFirstName] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Determine backend URL based on environment
-  const BACKEND_URL = typeof window !== 'undefined' && window.location.hostname !== 'localhost'
-    ? `http://${window.location.hostname}:3001`
-    : 'http://localhost:3001';
+  // Use relative paths for API calls (works through tunnel and locally)
+  const BACKEND_URL = '';
 
   const currentConversation = conversations.find(c => c.id === currentConversationId);
 

@@ -131,12 +131,9 @@ export default function Sidebar({
           return;
         }
 
-        const BACKEND_URL = typeof window !== 'undefined' && window.location.hostname !== 'localhost'
-          ? `http://${window.location.hostname}:3001`
-          : 'http://localhost:3001';
-
-        console.log('Loading config for username:', username, 'from:', BACKEND_URL);
-        const response = await fetch(`${BACKEND_URL}/api/user/config/${username.toLowerCase()}`, {
+        // Use relative paths for API calls (works through tunnel and locally)
+        console.log('Loading config for username:', username);
+        const response = await fetch(`/api/user/config/${username.toLowerCase()}`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }

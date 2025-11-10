@@ -17,6 +17,7 @@ const PERMISSIONS_FILE = path.join(__dirname, 'permissions.json');
 const CONVERSATIONS_DIR = path.join(__dirname, 'conversations');
 const CLAUDE_SESSIONS_DIR = path.join(__dirname, 'users');
 const USER_CONFIGS_DIR = path.join(__dirname, 'user-configs');
+const SKILLS_DIR = path.join(process.env.HOME, '.claude', 'skills');
 
 // Ensure directories exist
 if (!fs.existsSync(CONVERSATIONS_DIR)) {
@@ -268,6 +269,7 @@ app.post('/api/chat', authenticateToken, async (req, res) => {
 
       // Handle result message
       else if (sdkMsg.type === 'result') {
+        console.log('[CHAT] Result message:', JSON.stringify(sdkMsg, null, 2));
         const resultInfo = {
           type: 'result',
           done: true,
