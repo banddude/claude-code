@@ -3,10 +3,18 @@
 import { useState, useEffect } from 'react';
 import FileTree from './FileTree';
 
+interface Message {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  contentBlocks?: Array<{type: 'text', content: string} | {type: 'tool', tool: string, toolUseId: string}>;
+}
+
 interface Conversation {
   id: string;
   title: string;
   timestamp: Date;
+  messages: Message[];
 }
 
 interface UserConfig {
@@ -51,6 +59,9 @@ export default function Sidebar({
   const [showFileTree, setShowFileTree] = useState(false);
   const [touchStart, setTouchStart] = useState<number | null>(null);
   const [touchEnd, setTouchEnd] = useState<number | null>(null);
+  const [longPressConversation, setLongPressConversation] = useState<Conversation | null>(null);
+  const [longPressTimer, setLongPressTimer] = useState<NodeJS.Timeout | null>(null);
+  const [longPressTriggered, setLongPressTriggered] = useState(false);
 
   const isCollapsed = externalIsCollapsed !== undefined ? externalIsCollapsed : internalIsCollapsed;
   const setIsCollapsed = onToggleCollapse || setInternalIsCollapsed;
@@ -163,6 +174,54 @@ export default function Sidebar({
     .toUpperCase()
     .slice(0, 2);
 
+  // Long press handlers for conversation items
+  const handleConversationTouchStart = (conv: Conversation, e: React.TouchEvent) => {
+    if (!isMobile) return;
+
+    // Reset the triggered flag
+    setLongPressTriggered(false);
+
+    // Clear any existing timer
+    if (longPressTimer) {
+      clearTimeout(longPressTimer);
+    }
+
+    // Start long press timer (500ms)
+    const timer = setTimeout(() => {
+      setLongPressConversation(conv);
+      setLongPressTriggered(true);
+    }, 500);
+
+    setLongPressTimer(timer);
+  };
+
+  const handleConversationTouchEnd = () => {
+    // Clear the timer if touch ends before long press triggers
+    if (longPressTimer) {
+      clearTimeout(longPressTimer);
+      setLongPressTimer(null);
+    }
+  };
+
+  const handleConversationTouchMove = () => {
+    // Cancel long press if finger moves
+    if (longPressTimer) {
+      clearTimeout(longPressTimer);
+      setLongPressTimer(null);
+    }
+  };
+
+  const handleConversationClick = (convId: string) => {
+    // Don't trigger click if long press was triggered
+    if (longPressTriggered) {
+      setLongPressTriggered(false);
+      return;
+    }
+
+    onSelectConversation(convId);
+    if (isMobile) setIsCollapsed(true);
+  };
+
   return (
     <>
       {/* Mobile overlay */}
@@ -178,6 +237,126 @@ export default function Sidebar({
           }}
           onClick={() => setIsCollapsed(true)}
         />
+      )}
+
+      {/* Long Press Preview Modal */}
+      {longPressConversation && isMobile && (
+        <div
+          className="fixed bg-black/70"
+          style={{
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: 10000,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '20px'
+          }}
+          onClick={() => setLongPressConversation(null)}
+        >
+          <div
+            className="bg-white rounded-lg shadow-xl"
+            style={{
+              maxWidth: '500px',
+              width: '100%',
+              maxHeight: '80vh',
+              overflow: 'hidden',
+              display: 'flex',
+              flexDirection: 'column'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header with title and delete button */}
+            <div
+              className="flex items-center justify-between border-b"
+              style={{
+                padding: '16px',
+                borderColor: 'rgba(31, 30, 29, 0.15)'
+              }}
+            >
+              <h3 className="text-lg font-semibold text-zinc-900 flex-1 truncate pr-4">
+                {longPressConversation.title}
+              </h3>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDeleteConversation(longPressConversation.id);
+                  setLongPressConversation(null);
+                }}
+                className="rounded-lg p-2 hover:bg-zinc-100 transition-colors flex-shrink-0"
+                aria-label="Delete conversation"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  strokeWidth={2}
+                  stroke="currentColor"
+                  className="h-6 w-6 text-red-600"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Message Preview */}
+            <div
+              className="overflow-y-auto flex-1"
+              style={{
+                padding: '16px',
+                backgroundColor: 'rgb(250, 249, 245)'
+              }}
+            >
+              {longPressConversation.messages && longPressConversation.messages.length > 0 ? (
+                <div className="space-y-4">
+                  {longPressConversation.messages.slice(0, 3).map((message) => (
+                    <div
+                      key={message.id}
+                      className="rounded-lg p-3"
+                      style={{
+                        backgroundColor: message.role === 'user' ? 'white' : 'rgb(244, 244, 245)'
+                      }}
+                    >
+                      <div className="text-xs font-semibold text-zinc-500 mb-1">
+                        {message.role === 'user' ? 'You' : 'Claude'}
+                      </div>
+                      <div className="text-sm text-zinc-900 whitespace-pre-wrap break-words">
+                        {message.content.length > 200
+                          ? message.content.substring(0, 200) + '...'
+                          : message.content}
+                      </div>
+                    </div>
+                  ))}
+                  {longPressConversation.messages.length > 3 && (
+                    <div className="text-center text-sm text-zinc-500">
+                      + {longPressConversation.messages.length - 3} more messages
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="text-center text-zinc-500">No messages yet</div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div
+              className="flex items-center justify-end border-t"
+              style={{
+                padding: '12px 16px',
+                borderColor: 'rgba(31, 30, 29, 0.15)'
+              }}
+            >
+              <button
+                onClick={() => setLongPressConversation(null)}
+                className="px-4 py-2 rounded-lg bg-zinc-900 text-white hover:bg-zinc-800 transition-colors text-sm font-medium"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       <nav
@@ -263,10 +442,10 @@ export default function Sidebar({
                     paddingBottom: isMobile ? '8px' : '4px',
                     backgroundColor: conv.id === currentConversationId ? 'rgb(244, 244, 245)' : 'transparent'
                   }}
-                  onClick={() => {
-                    onSelectConversation(conv.id);
-                    if (isMobile) setIsCollapsed(true);
-                  }}
+                  onClick={() => handleConversationClick(conv.id)}
+                  onTouchStart={(e) => handleConversationTouchStart(conv, e)}
+                  onTouchEnd={handleConversationTouchEnd}
+                  onTouchMove={handleConversationTouchMove}
                   onMouseEnter={(e) => {
                     if (conv.id !== currentConversationId) {
                       e.currentTarget.style.backgroundColor = 'rgb(244, 244, 245)';
