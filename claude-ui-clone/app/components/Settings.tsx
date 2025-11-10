@@ -47,7 +47,7 @@ const ALL_TOOLS = [
 ];
 
 const PERMISSION_MODES = [
-  { value: 'default', label: 'Has no access to tools or skills ', description: 'User has no tools or skills available' },
+  { value: 'default', label: 'Chat only ', description: 'Chat without any tools or skills' },
   { value: 'acceptEdits', label: 'Can use selected tools and skills ', description: 'Only allow selected tools and skills' },
   { value: 'bypassPermissions', label: 'Has no restrictions ', description: 'Skip all permission checks' },
 ];
