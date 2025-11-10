@@ -249,20 +249,31 @@ app.post('/api/chat', authenticateToken, async (req, res) => {
       // Use the standard permission mode
       queryOptions.permissionMode = userPermissions.permissionMode;
 
-      // Add allowed/denied tools if specified
-      if (userPermissions.allowedTools && userPermissions.allowedTools.length > 0) {
-        queryOptions.allowedTools = userPermissions.allowedTools;
+      // For acceptEdits mode: if tool/skill is not expressly allowed, it's denied
+      if (userPermissions.permissionMode === 'acceptEdits') {
+        // Always set allowedTools and allowedSkills (empty array means nothing is allowed)
+        queryOptions.allowedTools = userPermissions.allowedTools && userPermissions.allowedTools.length > 0
+          ? userPermissions.allowedTools
+          : [];
+        queryOptions.allowedSkills = userPermissions.allowedSkills && userPermissions.allowedSkills.length > 0
+          ? userPermissions.allowedSkills
+          : [];
+      } else {
+        // For other modes, only add allowed/denied if specified
+        if (userPermissions.allowedTools && userPermissions.allowedTools.length > 0) {
+          queryOptions.allowedTools = userPermissions.allowedTools;
+        }
+        if (userPermissions.deniedTools && userPermissions.deniedTools.length > 0) {
+          queryOptions.deniedTools = userPermissions.deniedTools;
+        }
+        if (userPermissions.allowedSkills && userPermissions.allowedSkills.length > 0) {
+          queryOptions.allowedSkills = userPermissions.allowedSkills;
+        }
+        if (userPermissions.deniedSkills && userPermissions.deniedSkills.length > 0) {
+          queryOptions.deniedSkills = userPermissions.deniedSkills;
+        }
       }
-      if (userPermissions.deniedTools && userPermissions.deniedTools.length > 0) {
-        queryOptions.deniedTools = userPermissions.deniedTools;
-      }
-      // Add allowed/denied skills if specified
-      if (userPermissions.allowedSkills && userPermissions.allowedSkills.length > 0) {
-        queryOptions.allowedSkills = userPermissions.allowedSkills;
-      }
-      if (userPermissions.deniedSkills && userPermissions.deniedSkills.length > 0) {
-        queryOptions.deniedSkills = userPermissions.deniedSkills;
-      }
+
       if (userPermissions.allowedDirectories && userPermissions.allowedDirectories.length > 0) {
         queryOptions.additionalDirectories = userPermissions.allowedDirectories;
       }
