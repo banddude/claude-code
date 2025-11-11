@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { flushSync } from 'react-dom';
 import ChatMessage from './components/ChatMessage';
 import ChatInput from './components/ChatInput';
 import Sidebar from './components/Sidebar';
@@ -8,6 +9,7 @@ import ThemeToggle from './components/ThemeToggle';
 import Login from './components/Login';
 import Settings from './components/Settings';
 import UserProfile from './components/UserProfile';
+import ChatsView from './components/ChatsView';
 import ClaudeLogo from './components/ClaudeLogo';
 import ToolUsage from './components/ToolUsage';
 
@@ -16,7 +18,7 @@ interface Message {
   role: 'user' | 'assistant';
   content: string;
   toolUses?: { tool: string; toolUseId: string }[];
-  contentBlocks?: Array<{type: 'text', content: string} | {type: 'tool', tool: string, toolUseId: string}>;
+  contentBlocks?: Array<{type: 'text', content: string} | {type: 'tool', tool: string, toolUseId: string, input?: any}>;
 }
 
 interface Conversation {
@@ -30,16 +32,18 @@ interface Conversation {
 export default function Home() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
+  const [currentFolderName, setCurrentFolderName] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [streamingContent, setStreamingContent] = useState('');
-  const [streamingBlocks, setStreamingBlocks] = useState<Array<{type: 'text', content: string} | {type: 'tool', tool: string, toolUseId: string}>>([]);
-  const [isThinking, setIsThinking] = useState(false);
+  const [pendingUserMessage, setPendingUserMessage] = useState<string | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [username, setUsername] = useState<string | null>(null);
-  const [currentView, setCurrentView] = useState<'chat' | 'settings' | 'profile'>('chat');
+  const [currentView, setCurrentView] = useState<'chat' | 'settings' | 'profile' | 'chats'>('chat');
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
+  const [isLandscape, setIsLandscape] = useState(false);
   const [userFirstName, setUserFirstName] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -48,14 +52,23 @@ export default function Home() {
 
   const currentConversation = conversations.find(c => c.id === currentConversationId);
 
-  // Detect mobile
+  // Detect mobile and orientation
   useEffect(() => {
     const checkMobile = () => {
       setIsMobile(window.innerWidth < 768);
+      setIsLandscape(window.innerWidth > window.innerHeight);
+      // Auto-collapse sidebar in landscape mode on mobile
+      if (window.innerWidth < 768 && window.innerWidth > window.innerHeight) {
+        setSidebarCollapsed(true);
+      }
     };
     checkMobile();
     window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
+    window.addEventListener('orientationchange', checkMobile);
+    return () => {
+      window.removeEventListener('resize', checkMobile);
+      window.removeEventListener('orientationchange', checkMobile);
+    };
   }, []);
 
   // Prevent all zoom attempts
@@ -234,28 +247,25 @@ export default function Home() {
     loadConversations();
   }, [token, BACKEND_URL]);
 
-  // Save conversations to backend
-  useEffect(() => {
+  // Reload conversations from backend (fetch fresh data)
+  const reloadConversations = async () => {
     if (!token) return;
-    if (conversations.length === 0) return;
 
-    const saveConversations = async () => {
-      try {
-        await fetch(`${BACKEND_URL}/api/conversations`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify(conversations)
-        });
-      } catch (error) {
-        console.error('Failed to save conversations:', error);
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/conversations`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setConversations(data.map((c: any) => ({
+          ...c,
+          timestamp: new Date(c.timestamp)
+        })));
       }
-    };
-
-    saveConversations();
-  }, [conversations, token, BACKEND_URL]);
+    } catch (error) {
+      console.error('Failed to reload conversations:', error);
+    }
+  };
 
   // Auto-scroll to bottom only when streaming or user is near bottom
   useEffect(() => {
@@ -303,10 +313,28 @@ export default function Home() {
     }
   };
 
-  const handleDeleteConversation = (id: string) => {
-    setConversations(prev => prev.filter(c => c.id !== id));
-    if (currentConversationId === id) {
-      setCurrentConversationId(null);
+  const handleDeleteConversation = async (id: string) => {
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/conversations/${id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (response.ok) {
+        setConversations(prev => prev.filter(c => c.id !== id));
+        if (currentConversationId === id) {
+          setCurrentConversationId(null);
+        }
+      } else {
+        const error = await response.json();
+        console.error('Failed to delete conversation:', error);
+        alert('Failed to delete conversation: ' + (error.error || 'Unknown error'));
+      }
+    } catch (error) {
+      console.error('Error deleting conversation:', error);
+      alert('Error deleting conversation');
     }
   };
 
@@ -317,52 +345,45 @@ export default function Home() {
     }
   };
 
+  const handleStop = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+      setIsLoading(false);
+    }
+  };
+
   const handleSendMessage = async (content: string) => {
+    console.log('[handleSendMessage] Called with content:', content);
+    console.log('[handleSendMessage] currentConversationId:', currentConversationId);
+
     if (!currentConversationId) {
-      const newConv: Conversation = {
-        id: Date.now().toString(),
-        title: content.slice(0, 50),
-        timestamp: new Date(),
-        messages: [],
-      };
-      setConversations(prev => [newConv, ...prev]);
-      setCurrentConversationId(newConv.id);
-      // Use the new conversation ID directly
-      await sendMessageWithConversation(content, newConv.id);
+      // Send message without conversation ID - backend will create new session
+      console.log('[handleSendMessage] Creating new conversation');
+      await sendMessageWithConversation(content, null);
       return;
     }
     await sendMessageWithConversation(content, currentConversationId);
   };
 
-  const sendMessageWithConversation = async (content: string, conversationId: string) => {
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      role: 'user',
-      content,
-    };
+  const sendMessageWithConversation = async (content: string, conversationId: string | null) => {
+    console.log('[sendMessageWithConversation] Starting with conversationId:', conversationId);
 
-    // Add user message
-    setConversations(prev =>
-      prev.map(conv =>
-        conv.id === conversationId
-          ? {
-              ...conv,
-              messages: [...conv.messages, userMessage],
-              title: conv.messages.length === 0 ? content.slice(0, 50) : conv.title,
-            }
-          : conv
-      )
-    );
+    // Show user message immediately
+    setPendingUserMessage(content);
 
     setIsLoading(true);
     setStreamingContent('');
-    setStreamingBlocks([]);
-    setIsThinking(true);
 
-    // Get the current conversation's messages for context
-    const conversation = conversations.find(c => c.id === conversationId);
+    // Get the current conversation's sessionId (if any)
+    const conversation = conversationId ? conversations.find(c => c.id === conversationId) : null;
+    console.log('[sendMessageWithConversation] Found conversation:', conversation);
+
+    // Create new AbortController for this request
+    abortControllerRef.current = new AbortController();
 
     try {
+      console.log('[sendMessageWithConversation] Fetching from backend...');
       const response = await fetch(`${BACKEND_URL}/api/chat`, {
         method: 'POST',
         headers: {
@@ -372,7 +393,9 @@ export default function Home() {
         body: JSON.stringify({
           message: content,
           sessionId: conversation?.sessionId,
+          folderName: currentFolderName,
         }),
+        signal: abortControllerRef.current.signal,
       });
 
       if (!response.ok) {
@@ -381,151 +404,77 @@ export default function Home() {
 
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
-      let contentBlocks: Array<{type: 'text', content: string, blockIndex: number} | {type: 'tool', tool: string, toolUseId: string, blockIndex: number}> = [];
-      let currentTextContent = '';
-      let currentBlockIndex = -1;
+      let fullContent = '';
+
+      console.log('[Stream] Starting to read stream, reader exists:', !!reader);
 
       if (reader) {
         while (true) {
           const { done, value } = await reader.read();
-          if (done) break;
+          if (done) {
+            console.log('[Stream] Stream reading complete');
+            break;
+          }
+
+          console.log('[Stream] Received chunk, size:', value?.length);
 
           const chunk = decoder.decode(value);
           const lines = chunk.split('\n');
+          console.log('[Stream] Split into', lines.length, 'lines');
 
           for (const line of lines) {
             if (line.startsWith('data: ')) {
               const data = JSON.parse(line.slice(6));
-
-              console.log('[FRONTEND] Received event:', data.type, data);
+              console.log('[Stream] Parsed data:', data.type);
 
               if (data.error) {
                 console.error('Stream error:', data.error);
                 break;
               }
 
-              // Handle different message types from backend
+              // Store session ID - backend handles this
               if (data.type === 'session_id') {
-                // Store the session ID for this conversation
-                setConversations(prev =>
-                  prev.map(conv =>
-                    conv.id === conversationId
-                      ? { ...conv, sessionId: data.sessionId }
-                      : conv
-                  )
-                );
+                // Backend already saved the session ID
                 continue;
               }
 
-              if (data.type === 'text_block_start') {
-                currentTextContent = '';
-                currentBlockIndex = data.blockIndex;
-              }
-
+              // Pour in text as it arrives
               if (data.type === 'text' && data.content) {
-                currentTextContent += data.content;
-                setIsThinking(false); // Stop thinking indicator when text starts
-                // Update streaming blocks with current text
-                const sortedBlocks = [...contentBlocks].sort((a, b) => a.blockIndex - b.blockIndex);
-                const displayBlocks = sortedBlocks.map(b => b.type === 'text' ? {type: 'text' as const, content: b.content} : {type: 'tool' as const, tool: b.tool, toolUseId: b.toolUseId});
-                if (currentTextContent) {
-                  displayBlocks.push({type: 'text' as const, content: currentTextContent});
-                }
-                setStreamingBlocks(displayBlocks);
+                fullContent += data.content;
+                setStreamingContent(fullContent);
+                console.log('[Stream] Updating streaming content, length:', fullContent.length);
               }
 
-              if (data.type === 'text_block_end') {
-                if (currentTextContent) {
-                  contentBlocks.push({ type: 'text', content: currentTextContent, blockIndex: currentBlockIndex });
-                  currentTextContent = '';
-                  // Update display blocks
-                  const sortedBlocks = [...contentBlocks].sort((a, b) => a.blockIndex - b.blockIndex);
-                  setStreamingBlocks(sortedBlocks.map(b => b.type === 'text' ? {type: 'text' as const, content: b.content} : {type: 'tool' as const, tool: b.tool, toolUseId: b.toolUseId}));
-                }
-              }
-
+              // Add tool names inline like CLI does
               if (data.type === 'tool_use') {
-                console.log('[FRONTEND] Received tool_use:', data.tool, 'at index', data.blockIndex);
-
-                // Check if we already have this tool (prevent duplicates)
-                const alreadyExists = contentBlocks.some(b => b.type === 'tool' && b.toolUseId === data.toolUseId);
-                if (alreadyExists) {
-                  console.log('[FRONTEND] Tool already exists, skipping:', data.toolUseId);
-                  continue;
-                }
-
-                // Finish any current text block
-                if (currentTextContent) {
-                  contentBlocks.push({ type: 'text', content: currentTextContent, blockIndex: currentBlockIndex });
-                  currentTextContent = '';
-                }
-                contentBlocks.push({ type: 'tool', tool: data.tool, toolUseId: data.toolUseId, blockIndex: data.blockIndex });
-                setIsThinking(false); // No longer just thinking, actively using tools
-
-                // Update display blocks
-                const sortedBlocks = [...contentBlocks].sort((a, b) => a.blockIndex - b.blockIndex);
-                const displayBlocks = sortedBlocks.map(b => b.type === 'text' ? {type: 'text' as const, content: b.content} : {type: 'tool' as const, tool: b.tool, toolUseId: b.toolUseId});
-                console.log('[FRONTEND] Setting streamingBlocks:', displayBlocks);
-                setStreamingBlocks(displayBlocks);
+                fullContent += `\n\n[Using ${data.tool}]\n\n`;
+                setStreamingContent(fullContent);
+                console.log('[Stream] Tool use:', data.tool);
               }
 
+              // When done, reload from backend
               if (data.type === 'result' || data.done) {
-                // Finish any remaining text block
-                if (currentTextContent) {
-                  contentBlocks.push({ type: 'text', content: currentTextContent, blockIndex: currentBlockIndex });
-                }
+                console.log('[Stream] Stream complete, reloading conversations');
+                await reloadConversations();
+                console.log('[Stream] Conversations reloaded');
 
-                // Merge all text blocks into final content
-                const finalContent = contentBlocks.filter(b => b.type === 'text').map(b => b.content).join('\n\n');
-
-                // Build display blocks - merge consecutive text blocks into ONE
-                const displayBlocks: Array<{type: 'text', content: string} | {type: 'tool', tool: string, toolUseId: string}> = [];
-                let mergedTextContent = '';
-
-                for (const block of contentBlocks) {
-                  if (block.type === 'text') {
-                    // Accumulate text
-                    mergedTextContent += (mergedTextContent ? '\n\n' : '') + block.content;
-                  } else {
-                    // Tool block - flush any accumulated text first
-                    if (mergedTextContent) {
-                      displayBlocks.push({type: 'text' as const, content: mergedTextContent});
-                      mergedTextContent = '';
+                // If this was a new conversation, select the newest one
+                if (!conversationId) {
+                  setConversations(prev => {
+                    if (prev.length > 0) {
+                      // Find the newest conversation by timestamp
+                      const newest = prev.reduce((a, b) => a.timestamp > b.timestamp ? a : b);
+                      setCurrentConversationId(newest.id);
+                      console.log('[Stream] Selected newest conversation:', newest.id);
                     }
-                    displayBlocks.push({type: 'tool' as const, tool: block.tool, toolUseId: block.toolUseId});
-                  }
-                }
-                // Flush any remaining text
-                if (mergedTextContent) {
-                  displayBlocks.push({type: 'text' as const, content: mergedTextContent});
+                    return prev;
+                  });
                 }
 
-                // CRITICAL FIX: Stop loading IMMEDIATELY to hide streaming message
+                // Clear pending states AFTER reload completes
                 setIsLoading(false);
                 setStreamingContent('');
-                setStreamingBlocks([]);
-                setIsThinking(false);
-
-                // Build the completed message
-                const assistantMessage: Message = {
-                  id: Date.now().toString(),
-                  role: 'assistant',
-                  content: finalContent,
-                  contentBlocks: displayBlocks.length > 0 ? displayBlocks : undefined,
-                };
-
-                console.log('[FRONTEND] Adding completed message:', assistantMessage);
-                console.log('[FRONTEND] Message has contentBlocks:', !!assistantMessage.contentBlocks);
-                console.log('[FRONTEND] Message has content:', !!assistantMessage.content);
-
-                // Add completed message - streaming is already hidden
-                setConversations(prev =>
-                  prev.map(conv =>
-                    conv.id === conversationId
-                      ? { ...conv, messages: [...conv.messages, assistantMessage] }
-                      : conv
-                  )
-                );
+                setPendingUserMessage(null);
                 break;
               }
             }
@@ -533,25 +482,18 @@ export default function Home() {
         }
       }
     } catch (error) {
+      // Check if error was due to abort
+      if (error instanceof Error && error.name === 'AbortError') {
+        console.log('Request was aborted by user');
+        return; // Don't show error message for user-initiated stops
+      }
+
       console.error('Error sending message:', error);
-      // Add error message
-      const errorMessage: Message = {
-        id: Date.now().toString(),
-        role: 'assistant',
-        content: 'Sorry, there was an error processing your request.',
-      };
-      setConversations(prev =>
-        prev.map(conv =>
-          conv.id === conversationId
-            ? { ...conv, messages: [...conv.messages, errorMessage] }
-            : conv
-        )
-      );
-    } finally {
+      // Just reload to show whatever was saved
+      await reloadConversations();
       setIsLoading(false);
-      setStreamingBlocks([]);
-      setIsThinking(false);
       setStreamingContent('');
+      setPendingUserMessage(null);
     }
   };
 
@@ -559,7 +501,7 @@ export default function Home() {
     <div className="flex flex-col h-screen overflow-hidden" style={{ backgroundColor: 'rgb(250, 249, 245)', position: 'fixed', width: '100%', height: '100vh', touchAction: 'pan-x pan-y' }}>
       {/* Fixed Header - Always visible, never scrolls, never zooms */}
       <header
-        className="fixed top-0 left-0 right-0 flex items-center h-12"
+        className="fixed top-0 left-0 right-0 flex items-center"
         style={{
           backgroundColor: 'rgb(250, 249, 245)',
           paddingLeft: '0',
@@ -570,7 +512,8 @@ export default function Home() {
           touchAction: 'none',
           WebkitTransform: 'translateZ(0)',
           transform: 'translateZ(0)',
-          willChange: 'transform'
+          willChange: 'transform',
+          height: isLandscape && isMobile ? '36px' : '48px'
         }}
       >
         <button
@@ -596,7 +539,7 @@ export default function Home() {
       </header>
 
       {/* Main content area below header */}
-      <div className="flex flex-1 overflow-hidden" style={{ marginTop: '48px' }}>
+      <div className="flex flex-1 overflow-hidden" style={{ marginTop: isLandscape && isMobile ? '36px' : '48px' }}>
         <Sidebar
           conversations={conversations}
           currentConversationId={currentConversationId}
@@ -607,6 +550,7 @@ export default function Home() {
           username={username || 'User'}
           onOpenSettings={() => setCurrentView('settings')}
           onOpenProfile={() => setCurrentView('profile')}
+          onOpenChats={() => setCurrentView('chats')}
           onLogout={handleLogout}
           isCollapsed={sidebarCollapsed}
           onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
@@ -614,11 +558,11 @@ export default function Home() {
 
         {currentView === 'chat' && (
         <div style={{ flex: 1, minWidth: 0, position: 'relative' }}>
-          {/* Messages - scrollable area that respects fixed header (48px) and input box */}
+          {/* Messages - scrollable area that respects fixed header and input box */}
           <div
             style={{
               position: 'fixed',
-              top: '48px',
+              top: isLandscape && isMobile ? '36px' : '48px',
               bottom: '0',
               left: isMobile ? '0' : (sidebarCollapsed ? '0' : '256px'),
               right: '0',
@@ -627,7 +571,7 @@ export default function Home() {
               WebkitOverflowScrolling: 'touch',
               overscrollBehavior: 'contain',
               paddingTop: '20px',
-              paddingBottom: `${keyboardHeight > 0 ? keyboardHeight + 120 : 140}px`,
+              paddingBottom: `${keyboardHeight > 0 ? keyboardHeight + (isLandscape && isMobile ? 80 : 120) : (isLandscape && isMobile ? 100 : 140)}px`,
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
@@ -636,7 +580,7 @@ export default function Home() {
             }}
           >
           <div style={{ width: '100%', maxWidth: '800px' }}>
-            {!currentConversation || currentConversation.messages.length === 0 ? (
+            {(!currentConversationId && !pendingUserMessage && !streamingContent) ? (
               <div className="flex items-center justify-center" style={{ paddingLeft: '24px', paddingRight: '24px', minHeight: 'calc(100vh - 228px)' }}>
                 <div className="text-center max-w-2xl mx-auto">
                   <div className="mb-6 flex justify-center">
@@ -652,7 +596,7 @@ export default function Home() {
               </div>
             ) : (
               <>
-                {currentConversation.messages.map((message) => (
+                {currentConversation?.messages.map((message) => (
                   <ChatMessage
                     key={message.id}
                     role={message.role}
@@ -662,37 +606,23 @@ export default function Home() {
                     contentBlocks={message.contentBlocks}
                   />
                 ))}
-                {/* Thinking indicator - show when processing but not outputting text */}
-                {isThinking && (
-                  <div className="group w-full py-6">
-                    <div className="max-w-3xl mx-auto px-4 sm:px-6" style={{ paddingLeft: '24px', paddingRight: '24px' }}>
-                      <div className="flex gap-3 sm:gap-4">
-                        <div className="flex-shrink-0">
-                          <div className="text-sm font-bold text-zinc-900">AIVA</div>
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 text-zinc-500 text-sm">
-                            <div className="flex gap-1">
-                              <div className="w-2 h-2 bg-zinc-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
-                              <div className="w-2 h-2 bg-zinc-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
-                              <div className="w-2 h-2 bg-zinc-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
-                            </div>
-                            <span>Thinking...</span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+
+                {/* Show pending user message */}
+                {pendingUserMessage && (
+                  <ChatMessage
+                    role="user"
+                    content={pendingUserMessage}
+                    username={userFirstName || username || 'User'}
+                  />
                 )}
 
-                {/* Streaming content with inline tools - only show while actually loading */}
-                {isLoading && streamingBlocks.length > 0 && (
+                {/* Streaming content - raw stream like CLI */}
+                {streamingContent && (
                   <ChatMessage
                     role="assistant"
-                    content=""
+                    content={streamingContent}
                     isStreaming={true}
                     username={userFirstName || username || 'User'}
-                    contentBlocks={streamingBlocks}
                   />
                 )}
                 <div ref={messagesEndRef} />
@@ -719,6 +649,28 @@ export default function Home() {
           />
         )}
 
+        {currentView === 'chats' && token && username && (
+          <ChatsView
+            token={token}
+            currentUsername={username}
+            onClose={() => setCurrentView('chat')}
+            onSelectConversation={(conversation) => {
+              // Add this conversation to the conversations array if it's not already there
+              setConversations(prev => {
+                const exists = prev.find(c => c.id === conversation.id);
+                if (exists) {
+                  return prev;
+                }
+                return [...prev, conversation];
+              });
+
+              setCurrentConversationId(conversation.id);
+              setCurrentFolderName(conversation.folderName || null);
+              setCurrentView('chat');
+            }}
+          />
+        )}
+
         {currentView === 'chat' && (
         <>
         {/* Input - FIXED at bottom with spacing, moves with keyboard */}
@@ -734,7 +686,7 @@ export default function Home() {
           paddingBottom: keyboardHeight > 0 ? '0' : 'env(safe-area-inset-bottom)'
         }}>
           <div style={{ width: '100%', maxWidth: '800px' }}>
-            <ChatInput onSend={handleSendMessage} disabled={isLoading} />
+            <ChatInput onSend={handleSendMessage} onStop={handleStop} isLoading={isLoading} />
           </div>
         </div>
         </>
