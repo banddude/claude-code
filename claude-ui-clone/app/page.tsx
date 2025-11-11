@@ -405,6 +405,9 @@ export default function Home() {
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
       let fullContent = '';
+      let contentBlocks: Array<{type: 'text', content: string} | {type: 'tool', tool: string, toolUseId: string}> = [];
+      let currentTextContent = '';
+      let currentBlockIndex = -1;
 
       console.log('[Stream] Starting to read stream, reader exists:', !!reader);
 
@@ -438,15 +441,44 @@ export default function Home() {
                 continue;
               }
 
+              // Handle text block start
+              if (data.type === 'text_block_start') {
+                currentBlockIndex = data.blockIndex;
+                currentTextContent = '';
+              }
+
               // Pour in text as it arrives
               if (data.type === 'text' && data.content) {
+                currentTextContent += data.content;
                 fullContent += data.content;
                 setStreamingContent(fullContent);
                 console.log('[Stream] Updating streaming content, length:', fullContent.length);
               }
 
-              // Add tool names inline like CLI does
+              // Handle text block end - save the completed text block
+              if (data.type === 'text_block_end') {
+                if (currentTextContent) {
+                  contentBlocks.push({ type: 'text', content: currentTextContent });
+                  currentTextContent = '';
+                }
+              }
+
+              // Add tool usage as a proper block
               if (data.type === 'tool_use') {
+                // Finish any current text block first
+                if (currentTextContent) {
+                  contentBlocks.push({ type: 'text', content: currentTextContent });
+                  currentTextContent = '';
+                }
+
+                // Add tool block
+                contentBlocks.push({
+                  type: 'tool',
+                  tool: data.tool,
+                  toolUseId: data.toolUseId
+                });
+
+                // Also add to plain content for display during streaming
                 fullContent += `\n\n[Using ${data.tool}]\n\n`;
                 setStreamingContent(fullContent);
                 console.log('[Stream] Tool use:', data.tool);

@@ -229,9 +229,27 @@ app.get('/api/conversations', authenticateToken, async (req, res) => {
             }
 
             if (entry.type === 'user' || entry.type === 'assistant') {
-              // Extract text from content array
+              // Extract text from content array and preserve content blocks
               let contentText = '';
+              let contentBlocks = [];
+
               if (Array.isArray(entry.message?.content)) {
+                // Build content blocks preserving both text and tool_use
+                contentBlocks = entry.message.content.map(block => {
+                  if (block.type === 'text') {
+                    return { type: 'text', content: block.text };
+                  } else if (block.type === 'tool_use') {
+                    return {
+                      type: 'tool',
+                      tool: block.name,
+                      toolUseId: block.id,
+                      input: block.input
+                    };
+                  }
+                  return null;
+                }).filter(Boolean);
+
+                // Also build plain text for backwards compatibility
                 contentText = entry.message.content
                   .filter(block => block.type === 'text')
                   .map(block => block.text)
@@ -244,6 +262,7 @@ app.get('/api/conversations', authenticateToken, async (req, res) => {
                 id: entry.uuid,
                 role: entry.type === 'user' ? 'user' : 'assistant',
                 content: contentText,
+                contentBlocks: contentBlocks.length > 0 ? contentBlocks : undefined,
                 timestamp: entry.timestamp
               });
             }
@@ -653,9 +672,27 @@ app.get('/api/all-conversations', authenticateToken, async (req, res) => {
             }
 
             if (entry.type === 'user' || entry.type === 'assistant') {
-              // Extract text from content array
+              // Extract text from content array and preserve content blocks
               let contentText = '';
+              let contentBlocks = [];
+
               if (Array.isArray(entry.message?.content)) {
+                // Build content blocks preserving both text and tool_use
+                contentBlocks = entry.message.content.map(block => {
+                  if (block.type === 'text') {
+                    return { type: 'text', content: block.text };
+                  } else if (block.type === 'tool_use') {
+                    return {
+                      type: 'tool',
+                      tool: block.name,
+                      toolUseId: block.id,
+                      input: block.input
+                    };
+                  }
+                  return null;
+                }).filter(Boolean);
+
+                // Also build plain text for backwards compatibility
                 contentText = entry.message.content
                   .filter(block => block.type === 'text')
                   .map(block => block.text)
@@ -668,6 +705,7 @@ app.get('/api/all-conversations', authenticateToken, async (req, res) => {
                 id: entry.uuid,
                 role: entry.type === 'user' ? 'user' : 'assistant',
                 content: contentText,
+                contentBlocks: contentBlocks.length > 0 ? contentBlocks : undefined,
                 timestamp: entry.timestamp
               });
             }
