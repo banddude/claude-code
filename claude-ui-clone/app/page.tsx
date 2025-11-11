@@ -35,6 +35,7 @@ export default function Home() {
   const [currentFolderName, setCurrentFolderName] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [streamingContent, setStreamingContent] = useState('');
+  const [streamingBlocks, setStreamingBlocks] = useState<Array<{type: 'text', content: string} | {type: 'tool', tool: string, toolUseId: string}>>([]);
   const [pendingUserMessage, setPendingUserMessage] = useState<string | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const [token, setToken] = useState<string | null>(null);
@@ -307,6 +308,7 @@ export default function Home() {
   const handleSelectConversation = (id: string) => {
     setCurrentConversationId(id);
     setStreamingContent('');
+    setStreamingBlocks([]);
     // Close sidebar on mobile when a chat is selected
     if (isMobile) {
       setSidebarCollapsed(true);
@@ -374,6 +376,7 @@ export default function Home() {
 
     setIsLoading(true);
     setStreamingContent('');
+    setStreamingBlocks([]);
 
     // Get the current conversation's sessionId (if any)
     const conversation = conversationId ? conversations.find(c => c.id === conversationId) : null;
@@ -451,14 +454,39 @@ export default function Home() {
               if (data.type === 'text' && data.content) {
                 currentTextContent += data.content;
                 fullContent += data.content;
+
+                // Update the current text block in contentBlocks (or add if doesn't exist)
+                const newBlocks = [...contentBlocks];
+                const lastBlock = newBlocks[newBlocks.length - 1];
+
+                if (lastBlock && lastBlock.type === 'text') {
+                  // Update existing text block
+                  lastBlock.content = currentTextContent;
+                } else {
+                  // Add new text block
+                  newBlocks.push({ type: 'text', content: currentTextContent });
+                }
+
+                setStreamingBlocks(newBlocks);
                 setStreamingContent(fullContent);
                 console.log('[Stream] Updating streaming content, length:', fullContent.length);
               }
 
-              // Handle text block end - save the completed text block
+              // Handle text block end - finalize the text block
               if (data.type === 'text_block_end') {
                 if (currentTextContent) {
-                  contentBlocks.push({ type: 'text', content: currentTextContent });
+                  // Finalize the current text block
+                  const newBlocks = [...contentBlocks];
+                  const lastBlock = newBlocks[newBlocks.length - 1];
+
+                  if (lastBlock && lastBlock.type === 'text') {
+                    lastBlock.content = currentTextContent;
+                  } else {
+                    newBlocks.push({ type: 'text', content: currentTextContent });
+                  }
+
+                  contentBlocks = newBlocks;
+                  setStreamingBlocks(newBlocks);
                   currentTextContent = '';
                 }
               }
@@ -472,13 +500,17 @@ export default function Home() {
                 }
 
                 // Add tool block
-                contentBlocks.push({
-                  type: 'tool',
+                const toolBlock = {
+                  type: 'tool' as const,
                   tool: data.tool,
                   toolUseId: data.toolUseId
-                });
+                };
+                contentBlocks.push(toolBlock);
 
-                // Also add to plain content for display during streaming
+                // Update streaming blocks immediately to show tool
+                setStreamingBlocks([...contentBlocks]);
+
+                // Also add to plain content for backwards compatibility
                 fullContent += `\n\n[Using ${data.tool}]\n\n`;
                 setStreamingContent(fullContent);
                 console.log('[Stream] Tool use:', data.tool);
@@ -506,6 +538,7 @@ export default function Home() {
                 // Clear pending states AFTER reload completes
                 setIsLoading(false);
                 setStreamingContent('');
+                setStreamingBlocks([]);
                 setPendingUserMessage(null);
                 break;
               }
@@ -525,6 +558,7 @@ export default function Home() {
       await reloadConversations();
       setIsLoading(false);
       setStreamingContent('');
+      setStreamingBlocks([]);
       setPendingUserMessage(null);
     }
   };
@@ -648,11 +682,12 @@ export default function Home() {
                   />
                 )}
 
-                {/* Streaming content - raw stream like CLI */}
-                {streamingContent && (
+                {/* Streaming content - use contentBlocks for proper tool display */}
+                {streamingBlocks.length > 0 && (
                   <ChatMessage
                     role="assistant"
-                    content={streamingContent}
+                    content=""
+                    contentBlocks={streamingBlocks}
                     isStreaming={true}
                     username={userFirstName || username || 'User'}
                   />
