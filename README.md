@@ -1,5 +1,7 @@
 # Claude Code
 
+> **Retired fork / reference only.** Mike's live Claude/AIVA runtime no longer deploys from this repository. The canonical provider/runtime work now lives in `banddude/aiva`; the custom `claude-ui-clone` here is historical. Do not start new product work in this repo.
+
 ![](https://img.shields.io/badge/Node.js-18%2B-brightgreen?style=flat-square) [![npm]](https://www.npmjs.com/package/@anthropic-ai/claude-code)
 
 [npm]: https://img.shields.io/npm/v/@anthropic-ai/claude-code.svg?style=flat-square
